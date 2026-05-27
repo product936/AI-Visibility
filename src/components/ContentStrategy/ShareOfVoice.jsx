@@ -31,10 +31,6 @@ export default function ShareOfVoice() {
       <div className="mt-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {competitors.map(c => {
           const isYou = c.isYou
-          const deltaColor =
-            c.deltaDir === 'up' ? 'text-emerald-600'
-            : c.deltaDir === 'down' ? 'text-red-600'
-            : 'text-slate-500'
           return (
             <div
               key={c.name}
@@ -58,7 +54,6 @@ export default function ShareOfVoice() {
                   style={{ width: `${(c.cited / max) * 100}%` }}
                 />
               </div>
-              <div className={`mt-2 text-xs font-medium ${deltaColor}`}>{c.delta}</div>
             </div>
           )
         })}

@@ -35,7 +35,7 @@ export default function ContentStrategy() {
       <header className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-[26px] font-semibold text-slate-900 tracking-tight">
-            Content Strategy &amp; AI Visibility
+            AI Visibility &amp; Content Strategy
           </h1>
           <p className="mt-1 text-slate-500">
             Monitor how IndusInd Bank appears in AI answers — and close the gaps
@@ -45,7 +45,7 @@ export default function ContentStrategy() {
             <ChevronRight className="w-3.5 h-3.5" />
             <span>Pages AI</span>
             <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-slate-700">Content Strategy &amp; AI Visibility</span>
+            <span className="text-slate-700">AI Visibility &amp; Content Strategy</span>
           </nav>
         </div>
 
@@ -83,12 +83,12 @@ export default function ContentStrategy() {
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <Info className="w-4 h-4 text-blue-600 shrink-0" />
               <span>
-                Showing AI visibility insights for <span className="font-medium">100 IndusInd Bank branches</span>. Expand to all branches for complete coverage.
+                Showing AI visibility insights for <span className="font-medium">top 30 cities in India</span>.
               </span>
             </div>
             <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 shrink-0">
               <MapPin className="w-4 h-4 text-blue-600" />
-              100 locations
+              30 Cities
               <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
           </div>
