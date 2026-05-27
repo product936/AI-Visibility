@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Eye, CheckCircle2, XCircle } from 'lucide-react'
+import { Eye, CheckCircle2, XCircle, ChevronDown } from 'lucide-react'
 import { productCategories, llms, productMatrix } from '../../data/dummy.js'
 
 function scoreClass(score) {
@@ -11,6 +11,7 @@ function scoreClass(score) {
 
 export default function ProductMatrix() {
   const [filter, setFilter] = useState('All')
+  const [open, setOpen] = useState(false)
 
   const rows = useMemo(
     () => (filter === 'All' ? productMatrix : productMatrix.filter(r => r.category === filter)),
@@ -26,23 +27,31 @@ export default function ProductMatrix() {
             AI Visibility By Product &amp; LLM
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Are IndusInd Bank products appearing in AI answers? <span className="text-emerald-600">Green</span> = visible, <span className="text-red-600">Red</span> = absent.
+            Are IndusInd Bank products appearing in AI answers?
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {productCategories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                filter === cat
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+        <div className="relative">
+          <button
+            onClick={() => setOpen(v => !v)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            className="flex items-center justify-between gap-2 min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <span>{filter}</span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
+          {open && (
+            <div className="absolute right-0 top-full mt-1 w-[160px] rounded-lg border border-slate-200 bg-white shadow-lg z-10 py-1">
+              {productCategories.map(cat => (
+                <button
+                  key={cat}
+                  onMouseDown={() => { setFilter(cat); setOpen(false) }}
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 ${filter === cat ? 'text-blue-700 font-medium bg-blue-50' : 'text-slate-700'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
