@@ -36,15 +36,22 @@ const navItems = [
 ]
 
 function SingleInterfaceLogo() {
-  const dots = [
-    ['#2563eb', '#2563eb', '#7c3aed'],
-    ['#7c3aed', '#7c3aed', '#06b6d4'],
-    ['#06b6d4', '#10b981', '#10b981'],
+  // 3×3 grid: all dots dark navy (#0a0a5e), centre dot bright blue (#00aaff)
+  const navy = '#0a0a5e'
+  const blue = '#00aaff'
+  const colors = [
+    navy, navy, navy,
+    navy, blue, navy,
+    navy, navy, navy,
   ]
   return (
-    <div className="grid grid-cols-3 gap-[3px] w-6 h-6 shrink-0">
-      {dots.flat().map((c, i) => (
-        <span key={i} className="rounded-[2px]" style={{ background: c }} />
+    <div className="grid grid-cols-3 gap-[4px] w-7 h-7 shrink-0">
+      {colors.map((c, i) => (
+        <span
+          key={i}
+          className="rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
