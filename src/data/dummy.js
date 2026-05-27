@@ -1,3 +1,9 @@
+// Values sourced from data/AI_Visibility_Data_IndusInd_Bank.xlsx
+// Sheets the Excel covers: Aggregate Data, Prompt-level visibility.
+// Sections not covered by the Excel (Share of Voice, Citation Ownership,
+// Source Categories, Top Sources, High-Value Gaps) keep illustrative
+// placeholder data until those data points become available.
+
 export const kpis = [
   {
     key: 'visibility',
@@ -6,7 +12,7 @@ export const kpis = [
     suffix: '/100',
     delta: '+8',
     deltaDir: 'up',
-    sub: 'Across 5 LLMs · 100 locations',
+    sub: 'Across 4 LLMs · 100 locations',
     iconBg: 'bg-blue-50',
     iconColor: 'text-blue-600',
     icon: 'eye',
@@ -15,10 +21,9 @@ export const kpis = [
     key: 'owned',
     label: 'Owned-Source Citation Rate',
     value: '34%',
-    extra: '(50 sources)',
     delta: '+4%',
     deltaDir: 'up',
-    sub: '50 of 148 unique sources',
+    sub: 'Of all AI citations',
     iconBg: 'bg-emerald-50',
     iconColor: 'text-emerald-600',
     icon: 'shield-check',
@@ -30,56 +35,43 @@ export const kpis = [
     delta: '-3%',
     deltaDir: 'up',
     deltaTone: 'bad',
-    sub: '5 critical gaps identified',
+    sub: 'Illustrative · pending data',
     iconBg: 'bg-amber-50',
     iconColor: 'text-amber-600',
     icon: 'alert-triangle',
   },
   {
     key: 'third',
-    label: 'Third-Party Influence',
-    value: '62%',
+    label: 'Top Third-Party Source',
+    value: '25%',
     delta: '+5%',
     deltaDir: 'down',
     deltaTone: 'bad',
-    sub: 'Top: bankbazaar.com',
+    sub: 'Top: reddit.com',
     iconBg: 'bg-violet-50',
     iconColor: 'text-violet-600',
     icon: 'users',
   },
 ]
 
-export const productCategories = [
-  'All',
-  'Deposits',
-  'Cards',
-  'Loans',
-  'NRI',
-  'Digital',
-  'Travel',
-  'Wealth',
-  'Business',
-]
+export const productCategories = ['All', 'Deposits', 'Cards', 'Loans']
 
 export const llms = [
   { key: 'chatgpt', label: 'ChatGPT', emoji: '🍪' },
-  { key: 'google', label: 'Google AI', emoji: '🔍' },
   { key: 'gemini', label: 'Gemini', emoji: '✨' },
   { key: 'perplexity', label: 'Perplexity', emoji: '🪐' },
   { key: 'claude', label: 'Claude', emoji: '🍑' },
 ]
 
+// Aggregated from the 6 prompts in "Prompt-level visibility".
+// A product is "visible" on an LLM if at least one of its prompts was mentioned.
+// Score = (visible LLMs / total LLMs) × 100.
 export const productMatrix = [
-  { product: 'Savings Account', category: 'Deposits', chatgpt: true, google: true, gemini: true, perplexity: false, claude: true, score: 80 },
-  { product: 'Indulge Credit Card', category: 'Cards', chatgpt: true, google: false, gemini: true, perplexity: true, claude: false, score: 60 },
-  { product: 'Personal Loan', category: 'Loans', chatgpt: true, google: true, gemini: false, perplexity: true, claude: true, score: 80 },
-  { product: 'Home Loan', category: 'Loans', chatgpt: false, google: true, gemini: false, perplexity: false, claude: false, score: 20 },
-  { product: 'NRI Banking (NRE/NRO)', category: 'NRI', chatgpt: true, google: true, gemini: true, perplexity: true, claude: true, score: 100 },
-  { product: 'Fixed Deposit', category: 'Deposits', chatgpt: true, google: false, gemini: true, perplexity: true, claude: false, score: 60 },
-  { product: 'IndusMobile App', category: 'Digital', chatgpt: false, google: false, gemini: true, perplexity: false, claude: false, score: 20 },
-  { product: 'IndusForex Card', category: 'Travel', chatgpt: true, google: true, gemini: false, perplexity: false, claude: true, score: 60 },
-  { product: 'PIONEER Wealth Mgmt', category: 'Wealth', chatgpt: false, google: false, gemini: false, perplexity: false, claude: false, score: 0 },
-  { product: 'SME Business Loans', category: 'Business', chatgpt: true, google: false, gemini: true, perplexity: false, claude: false, score: 40 },
+  { product: 'Salary Account', category: 'Deposits', chatgpt: true, gemini: true, perplexity: true, claude: false, score: 75 },
+  { product: 'Fixed Deposit', category: 'Deposits', chatgpt: true, gemini: true, perplexity: true, claude: true, score: 100 },
+  { product: 'Savings Account', category: 'Deposits', chatgpt: true, gemini: true, perplexity: true, claude: true, score: 100 },
+  { product: 'Credit Card', category: 'Cards', chatgpt: true, gemini: true, perplexity: false, claude: true, score: 75 },
+  { product: 'Home Loans', category: 'Loans', chatgpt: false, gemini: false, perplexity: false, claude: false, score: 0 },
 ]
 
 export const competitors = [
@@ -117,11 +109,16 @@ export const topSources = [
   { rank: 8, source: 'policybazaar.com', icon: '🛡️', category: 'Aggregator', ownership: 'Third-party', content: 'Paid', pos: '#8', freq: 44, share: 7, cites: false },
 ]
 
+// Sourced from the "Prompt-level visibility" sheet.
+// `mentions` = count of LLMs (out of 4) that mentioned IndusInd for this prompt.
+// `indusindCited` is true when mentioned in at least one LLM.
 export const promptDetails = [
-  { prompt: 'Best savings account interest rate in private bank India', citations: 7, sources: 6, indusindCited: true },
-  { prompt: 'Best credit card for travel lounge access India 2025', citations: 5, sources: 4, indusindCited: false },
-  { prompt: 'How to open NRI account in India online', citations: 9, sources: 7, indusindCited: true },
-  { prompt: 'Personal loan interest rates comparison India 2025', citations: 6, sources: 5, indusindCited: true },
+  { prompt: 'I just started a new job, which kind of bank account should I open?', product: 'Salary Account', category: 'Deposits', mentions: 3, totalLlms: 4, indusindCited: true },
+  { prompt: 'I want to park 5 lakh for a year safely - FD, debt fund or savings account?', product: 'FD', category: 'Deposits', mentions: 4, totalLlms: 4, indusindCited: true },
+  { prompt: 'What should I look for when choosing a credit card for the first time?', product: 'Credit Card', category: 'Cards', mentions: 2, totalLlms: 4, indusindCited: true },
+  { prompt: 'What are the best banks for savings accounts opening in India?', product: 'Savings Account', category: 'Deposits', mentions: 4, totalLlms: 4, indusindCited: true },
+  { prompt: 'Which banks offer the best credit cards for online shopping and travel — give me options.', product: 'Credit Card', category: 'Cards', mentions: 2, totalLlms: 4, indusindCited: true },
+  { prompt: 'Which banks give best interest rates for Home Loans in India?', product: 'Home Loans', category: 'Loans', mentions: 0, totalLlms: 4, indusindCited: false },
 ]
 
 export const highValueGaps = [
