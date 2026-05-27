@@ -26,7 +26,6 @@ import CitationOwnership from '../components/ContentStrategy/CitationOwnership.j
 import CitationCategories from '../components/ContentStrategy/CitationCategories.jsx'
 import TopSources from '../components/ContentStrategy/TopSources.jsx'
 import CitationDetail from '../components/ContentStrategy/CitationDetail.jsx'
-import HighValueGaps from '../components/ContentStrategy/HighValueGaps.jsx'
 
 export default function ContentStrategy() {
   const [tab, setTab] = useState('visibility')
@@ -103,7 +102,6 @@ export default function ContentStrategy() {
             <CitationCategories />
           </div>
 
-          <HighValueGaps />
           <TopSources />
           <CitationDetail />
         </>
