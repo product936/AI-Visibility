@@ -1,5 +1,11 @@
 {
+  "functions": {
+    "api/check.js": {
+      "maxDuration": 300
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/((?!api).*)", "destination": "/" }
   ]
 }

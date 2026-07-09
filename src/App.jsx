@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout.jsx'
 import ContentStrategy from './pages/ContentStrategy.jsx'
+import DataChecker from './pages/DataChecker.jsx'
 import Placeholder from './pages/Placeholder.jsx'
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
       <Route element={<AppLayout />}>
         <Route path="/" element={<Navigate to="/content-strategy" replace />} />
         <Route path="/content-strategy" element={<ContentStrategy />} />
+        <Route path="/data-checker" element={<DataChecker />} />
         <Route path="/insights" element={<Placeholder title="Insights" />} />
         <Route path="/radar" element={<Placeholder title="Radar" />} />
         <Route path="/scan" element={<Placeholder title="Scan" />} />
