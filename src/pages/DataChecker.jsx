@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
-  Upload,
   Play,
   CheckCircle2,
   AlertTriangle,
@@ -12,6 +11,7 @@ import {
   FileSpreadsheet,
   ChevronDown,
   ChevronRight,
+  X,
 } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 
@@ -58,22 +58,61 @@ function Section({ title, children, right }) {
   )
 }
 
-function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, file, setFile, onRun, running }) {
-  const fileInputRef = useRef(null)
+function FileField({ label, hint, file, onFile, disabled }) {
+  const ref = useRef(null)
+  return (
+    <div>
+      <div className="text-xs font-medium text-slate-600">{label}</div>
+      <div
+        className={cn(
+          'mt-1 flex items-center gap-2 border rounded-lg px-3 py-2',
+          disabled ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'cursor-pointer',
+          file ? 'border-slate-300' : 'border-dashed border-slate-300 hover:border-blue-500'
+        )}
+        onClick={() => !disabled && ref.current?.click()}
+      >
+        <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
+        <span className="text-sm text-slate-700 truncate flex-1">
+          {file ? file.name : `Click to upload ${label.toLowerCase()}`}
+        </span>
+        {file && !disabled && (
+          <button
+            className="text-slate-400 hover:text-slate-700"
+            onClick={e => { e.stopPropagation(); onFile(null) }}
+            aria-label="Remove"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+        <input
+          ref={ref}
+          type="file"
+          accept=".xlsx,.xls,.xlsm"
+          className="hidden"
+          disabled={disabled}
+          onChange={e => onFile(e.target.files?.[0] || null)}
+        />
+      </div>
+      {hint && <div className="text-[11px] text-slate-500 mt-1">{hint}</div>}
+    </div>
+  )
+}
+
+function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, mentionsFile, setMentionsFile, citationsFile, setCitationsFile, onRun, running, canRun }) {
   return (
     <Section title="Run the Data Checker">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="block">
           <span className="text-xs font-medium text-slate-600">Brand name</span>
           <div className="mt-1 flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 focus-within:border-blue-500">
             <Globe className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="e.g. IndusInd Bank"
+              placeholder="e.g. Mahindra"
               value={brandName}
               onChange={e => setBrandName(e.target.value)}
               disabled={running}
-              className="w-full outline-none text-sm"
+              className="w-full outline-none text-sm bg-transparent"
             />
           </div>
         </label>
@@ -83,46 +122,37 @@ function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, file, setFi
             <Link2 className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="https://www.indusind.com/"
+              placeholder="https://auto.mahindra.com/"
               value={brandUrl}
               onChange={e => setBrandUrl(e.target.value)}
               disabled={running}
-              className="w-full outline-none text-sm"
+              className="w-full outline-none text-sm bg-transparent"
             />
           </div>
         </label>
-        <label className="block">
-          <span className="text-xs font-medium text-slate-600">LLM responses (.xlsx)</span>
-          <div
-            className={cn(
-              'mt-1 flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer',
-              file ? 'border-slate-300' : 'border-dashed border-slate-300 hover:border-blue-500'
-            )}
-            onClick={() => !running && fileInputRef.current?.click()}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="text-sm text-slate-700 truncate">
-              {file ? file.name : 'Click to upload Excel file'}
-            </span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.xlsm"
-              className="hidden"
-              disabled={running}
-              onChange={e => setFile(e.target.files?.[0] || null)}
-            />
-          </div>
-        </label>
+        <FileField
+          label="Mentions Excel"
+          hint="Required. Columns: master_outlet_id, id (=response_id), question_text, platform, ai_response"
+          file={mentionsFile}
+          onFile={setMentionsFile}
+          disabled={running}
+        />
+        <FileField
+          label="Citations Excel"
+          hint="Optional. Columns: master_outlet_id, response_id, url, source, category, ownership, cited_you"
+          file={citationsFile}
+          onFile={setCitationsFile}
+          disabled={running}
+        />
       </div>
 
       <div className="mt-4 flex items-center gap-3">
         <button
           onClick={onRun}
-          disabled={running || !file || !brandUrl}
+          disabled={!canRun || running}
           className={cn(
             'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white',
-            running || !file || !brandUrl
+            !canRun || running
               ? 'bg-slate-300 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700'
           )}
@@ -131,17 +161,23 @@ function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, file, setFi
           {running ? 'Running…' : 'Run Now'}
         </button>
         <span className="text-xs text-slate-500">
-          Runs offline against the brand website you provide as canonical ground truth.
+          Uses the brand website as canonical ground truth. Citations are joined to mentions by (master_outlet_id, response_id).
         </span>
       </div>
     </Section>
   )
 }
 
-function ProgressPanel({ progress, log }) {
+function ProgressPanel({ progress, log, loaded }) {
   const { crawlDone, crawlTotal, responseDone, responseTotal, citationDone, citationTotal } = progress
   return (
     <Section title="Progress">
+      {loaded && (
+        <div className="flex flex-wrap gap-4 text-xs text-slate-600 mb-3">
+          <span><strong className="text-slate-900">{loaded.mentions?.count ?? 0}</strong> mentions loaded ({loaded.mentions?.sheet})</span>
+          <span><strong className="text-slate-900">{loaded.citations?.count ?? 0}</strong> citations loaded ({loaded.citations?.sheet || 'none'}){loaded.citations?.orphan ? ` — ${loaded.citations.orphan} orphan (no matching response)` : ''}</span>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
         <div>
           <div className="text-slate-500 text-xs">Brand crawl</div>
@@ -176,9 +212,7 @@ function ProgressPanel({ progress, log }) {
       </div>
       {log.length > 0 && (
         <div className="mt-3 max-h-32 overflow-y-auto text-xs text-slate-500 font-mono border-t border-slate-100 pt-2">
-          {log.slice(-30).map((l, i) => (
-            <div key={i}>{l}</div>
-          ))}
+          {log.slice(-30).map((l, i) => (<div key={i}>{l}</div>))}
         </div>
       )}
     </Section>
@@ -223,9 +257,7 @@ function PlatformBreakdown({ kpis }) {
             <div key={p} className="border border-slate-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium text-slate-900 capitalize">{p}</div>
-                <div className="text-xs text-slate-500">
-                  {(s.correct || 0)}/{total} correct
-                </div>
+                <div className="text-xs text-slate-500">{(s.correct || 0)}/{total} correct</div>
               </div>
               <div className="mt-2 flex h-2 rounded overflow-hidden bg-slate-100">
                 <div className="bg-emerald-500" style={{ width: seg('correct') + '%' }} />
@@ -251,7 +283,7 @@ function ResponseRow({ row }) {
   const [open, setOpen] = useState(false)
   const meta = VERDICT_META[row.verdict] || VERDICT_META.unverifiable
   return (
-    <div className={cn('border rounded-lg', meta.tone.replace(/text-\S+|bg-\S+/g, '').trim() || 'border-slate-200')}>
+    <div className="border border-slate-200 rounded-lg">
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-start gap-3 p-3 text-left hover:bg-slate-50 rounded-lg"
@@ -261,8 +293,16 @@ function ResponseRow({ row }) {
           <div className="flex flex-wrap items-center gap-2">
             <VerdictPill verdict={row.verdict} />
             <span className="text-xs font-medium text-slate-800 capitalize">{row.platform}</span>
-            {row.city && <span className="text-[11px] text-slate-500">{row.city}{row.state ? `, ${row.state}` : ''}</span>}
-            <span className="text-[11px] text-slate-400">#{row.id}</span>
+            {row.product && <span className="text-[11px] text-slate-600 bg-slate-100 rounded px-1.5 py-0.5">{row.product}</span>}
+            {row.discoverability_status && (
+              <span className={cn(
+                'text-[11px] rounded px-1.5 py-0.5',
+                row.discoverability_status === 'not_mentioned' ? 'bg-rose-50 text-rose-700' :
+                row.discoverability_status === 'partially_mentioned' ? 'bg-amber-50 text-amber-700' :
+                'bg-emerald-50 text-emerald-700'
+              )}>{row.discoverability_status.replace(/_/g, ' ')}</span>
+            )}
+            <span className="text-[11px] text-slate-400">#{row.response_id}</span>
           </div>
           <div className="mt-1 text-sm text-slate-800 line-clamp-1">{row.query}</div>
           <div className="text-xs text-slate-500 line-clamp-2 mt-0.5">{row.summary}</div>
@@ -271,6 +311,20 @@ function ResponseRow({ row }) {
       </button>
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-3">
+          {(row.competitor_mentioned?.length > 0 || row.product_mentioned != null) && (
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              {row.product_mentioned != null && (
+                <span className="bg-slate-100 text-slate-700 rounded px-2 py-0.5">
+                  Product mentioned: {String(row.product_mentioned) === '1' ? 'yes' : 'no'}
+                </span>
+              )}
+              {row.competitor_mentioned?.map((c, i) => (
+                <span key={i} className="bg-orange-50 text-orange-700 border border-orange-200 rounded px-2 py-0.5">
+                  competitor: {c}
+                </span>
+              ))}
+            </div>
+          )}
           <div>
             <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">LLM response</div>
             <div className="text-sm text-slate-800 whitespace-pre-wrap max-h-64 overflow-y-auto bg-slate-50 rounded p-3">
@@ -337,7 +391,7 @@ function ResponsesTable({ results }) {
       }
     >
       <div className="space-y-2">
-        {filtered.map(r => <ResponseRow key={r.id} row={r} />)}
+        {filtered.map(r => <ResponseRow key={r.pk} row={r} />)}
         {!filtered.length && <div className="text-sm text-slate-500">No rows.</div>}
       </div>
     </Section>
@@ -360,17 +414,25 @@ function CitedUrlsTable({ results }) {
     >
       {!results.length ? (
         <div className="text-sm text-slate-500">
-          No citation data found. Provide a second sheet with URL columns (e.g. <code>url</code>, <code>cited_by</code>) or include http(s) links directly in the response text.
+          Upload a Citations Excel file (with <code>master_outlet_id</code>, <code>response_id</code>, <code>url</code>) — or include raw http(s) links directly in the response text — to see cited-URL results here.
         </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((c, i) => (
             <div key={i} className="border border-slate-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
+              <div className="flex flex-wrap items-start gap-2">
                 <VerdictPill verdict={c.verdict} meta={CIT_VERDICT_META} />
-                <a href={c.url} target="_blank" rel="noreferrer" className="text-sm text-blue-700 hover:underline break-all">
+                <a href={c.url} target="_blank" rel="noreferrer" className="text-sm text-blue-700 hover:underline break-all flex-1 min-w-0">
                   {c.title || c.url}
                 </a>
+                {c.category && <span className="text-[11px] bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{c.category}</span>}
+                {c.ownership && <span className="text-[11px] bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{c.ownership}</span>}
+                {c.cited_you && (
+                  <span className={cn(
+                    'text-[11px] rounded px-1.5 py-0.5',
+                    c.cited_you === 'yes' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                  )}>cited brand: {c.cited_you}</span>
+                )}
               </div>
               <div className="text-xs text-slate-500 mt-1 break-all">{c.url}</div>
               {c.summary && <div className="text-sm text-slate-700 mt-2">{c.summary}</div>}
@@ -398,11 +460,13 @@ function CitedUrlsTable({ results }) {
 }
 
 export default function DataChecker() {
-  const [brandName, setBrandName] = useState('IndusInd Bank')
-  const [brandUrl, setBrandUrl] = useState('https://www.indusind.com/')
-  const [file, setFile] = useState(null)
+  const [brandName, setBrandName] = useState('Mahindra')
+  const [brandUrl, setBrandUrl] = useState('https://auto.mahindra.com/')
+  const [mentionsFile, setMentionsFile] = useState(null)
+  const [citationsFile, setCitationsFile] = useState(null)
   const [running, setRunning] = useState(false)
   const [log, setLog] = useState([])
+  const [loaded, setLoaded] = useState(null)
   const [progress, setProgress] = useState({
     crawlDone: 0, crawlTotal: 0,
     responseDone: 0, responseTotal: 0,
@@ -414,19 +478,22 @@ export default function DataChecker() {
   const [error, setError] = useState(null)
 
   const appendLog = useCallback((line) => setLog(l => [...l, line]), [])
+  const canRun = Boolean(mentionsFile && brandUrl.trim())
 
   const run = async () => {
-    if (!file || !brandUrl) return
+    if (!canRun) return
     setRunning(true)
     setError(null)
     setLog([])
+    setLoaded(null)
     setResponses([])
     setCitedUrls([])
     setResult(null)
     setProgress({ crawlDone: 0, crawlTotal: 0, responseDone: 0, responseTotal: 0, citationDone: 0, citationTotal: 0 })
 
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('mentionsFile', mentionsFile)
+    if (citationsFile) fd.append('citationsFile', citationsFile)
     fd.append('brandName', brandName)
     fd.append('brandUrl', brandUrl)
 
@@ -449,12 +516,7 @@ export default function DataChecker() {
           buf = buf.slice(idx + 2)
           if (!raw.startsWith('data:')) continue
           const payload = raw.replace(/^data:\s*/, '')
-          try {
-            const evt = JSON.parse(payload)
-            handleEvent(evt)
-          } catch {
-            // ignore parse error
-          }
+          try { handleEvent(JSON.parse(payload)) } catch { /* ignore parse */ }
         }
       }
     } catch (e) {
@@ -470,8 +532,9 @@ export default function DataChecker() {
         appendLog(evt.message)
         break
       case 'loaded':
-        appendLog(`Loaded ${evt.responseCount} responses, ${evt.citationCount} citation rows from ${evt.sheets.join(', ')}`)
-        setProgress(p => ({ ...p, responseTotal: Math.min(evt.responseCount, 60) }))
+        setLoaded({ mentions: evt.mentions, citations: evt.citations })
+        appendLog(`Loaded ${evt.mentions?.count || 0} mentions, ${evt.citations?.count || 0} citations`)
+        setProgress(p => ({ ...p, responseTotal: Math.min(evt.mentions?.count || 0, 60) }))
         break
       case 'crawl':
         if (evt.stage === 'fetched') {
@@ -524,7 +587,7 @@ export default function DataChecker() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Data Checker</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Verifies factual correctness of LLM responses (and their cited URLs) against the brand website you provide as ground truth.
+            Verifies factual correctness of LLM responses (Mentions file) and their cited URLs (Citations file) against the brand website you provide as ground truth.
           </p>
         </div>
         {result && (
@@ -537,11 +600,12 @@ export default function DataChecker() {
       <InputForm
         brandName={brandName} setBrandName={setBrandName}
         brandUrl={brandUrl} setBrandUrl={setBrandUrl}
-        file={file} setFile={setFile}
-        onRun={run} running={running}
+        mentionsFile={mentionsFile} setMentionsFile={setMentionsFile}
+        citationsFile={citationsFile} setCitationsFile={setCitationsFile}
+        onRun={run} running={running} canRun={canRun}
       />
 
-      {(running || log.length > 0) && <ProgressPanel progress={progress} log={log} />}
+      {(running || log.length > 0) && <ProgressPanel progress={progress} log={log} loaded={loaded} />}
 
       {error && (
         <div className="border border-rose-200 bg-rose-50 text-rose-700 rounded-lg px-4 py-3 text-sm">
