@@ -139,7 +139,7 @@ function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, mentionsFil
         />
         <FileField
           label="Citations Excel"
-          hint="Optional. Columns: master_outlet_id, response_id, url, source, category, ownership, cited_you"
+          hint="Required. Columns: master_outlet_id, response_id, url, source, category, ownership, cited_you"
           file={citationsFile}
           onFile={setCitationsFile}
           disabled={running}
@@ -161,7 +161,7 @@ function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, mentionsFil
           {running ? 'Running…' : 'Run Now'}
         </button>
         <span className="text-xs text-slate-500">
-          Uses the brand website as canonical ground truth. Citations are joined to mentions by (master_outlet_id, response_id).
+          Ground truth per response = the response's own cited brand URLs. Responses with no brand-owned citation are skipped.
         </span>
       </div>
     </Section>
@@ -169,25 +169,32 @@ function InputForm({ brandName, setBrandName, brandUrl, setBrandUrl, mentionsFil
 }
 
 function ProgressPanel({ progress, log, loaded }) {
-  const { crawlDone, crawlTotal, responseDone, responseTotal, citationDone, citationTotal } = progress
+  const { fetchDone, fetchTotal, responseDone, responseTotal, citationCount } = progress
   return (
     <Section title="Progress">
       {loaded && (
         <div className="flex flex-wrap gap-4 text-xs text-slate-600 mb-3">
-          <span><strong className="text-slate-900">{loaded.mentions?.count ?? 0}</strong> mentions loaded ({loaded.mentions?.sheet})</span>
-          <span><strong className="text-slate-900">{loaded.citations?.count ?? 0}</strong> citations loaded ({loaded.citations?.sheet || 'none'}){loaded.citations?.orphan ? ` — ${loaded.citations.orphan} orphan (no matching response)` : ''}</span>
+          <span><strong className="text-slate-900">{loaded.mentions?.count ?? 0}</strong> mentions loaded</span>
+          <span><strong className="text-slate-900">{loaded.citations?.count ?? 0}</strong> citations loaded</span>
+          <span><strong className="text-slate-900">{loaded.eligible_response_count ?? 0}</strong> eligible (have a brand citation)</span>
+          {loaded.skipped_no_brand_citation > 0 && (
+            <span className="text-amber-700"><strong>{loaded.skipped_no_brand_citation}</strong> skipped (no brand URL cited)</span>
+          )}
+          {loaded.will_judge != null && loaded.will_judge < (loaded.eligible_response_count || 0) && (
+            <span className="text-slate-500">judging first {loaded.will_judge}</span>
+          )}
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
         <div>
-          <div className="text-slate-500 text-xs">Brand crawl</div>
+          <div className="text-slate-500 text-xs">Cited URLs fetched</div>
           <div className="mt-1 h-2 bg-slate-100 rounded overflow-hidden">
             <div
               className="h-full bg-blue-500 transition-all"
-              style={{ width: crawlTotal ? `${Math.min(100, (crawlDone / crawlTotal) * 100)}%` : '0%' }}
+              style={{ width: fetchTotal ? `${Math.min(100, (fetchDone / fetchTotal) * 100)}%` : '0%' }}
             />
           </div>
-          <div className="mt-1 text-slate-600 text-xs">{crawlDone}/{crawlTotal || '—'} pages</div>
+          <div className="mt-1 text-slate-600 text-xs">{fetchDone}/{fetchTotal || '—'}</div>
         </div>
         <div>
           <div className="text-slate-500 text-xs">Responses judged</div>
@@ -200,14 +207,14 @@ function ProgressPanel({ progress, log, loaded }) {
           <div className="mt-1 text-slate-600 text-xs">{responseDone}/{responseTotal || '—'}</div>
         </div>
         <div>
-          <div className="text-slate-500 text-xs">Cited URLs checked</div>
+          <div className="text-slate-500 text-xs">3rd-party URL verdicts</div>
           <div className="mt-1 h-2 bg-slate-100 rounded overflow-hidden">
             <div
               className="h-full bg-purple-500 transition-all"
-              style={{ width: citationTotal ? `${(citationDone / citationTotal) * 100}%` : '0%' }}
+              style={{ width: responseTotal ? `${Math.min(100, (responseDone / responseTotal) * 100)}%` : '0%' }}
             />
           </div>
-          <div className="mt-1 text-slate-600 text-xs">{citationDone}/{citationTotal || '—'}</div>
+          <div className="mt-1 text-slate-600 text-xs">{citationCount} unique</div>
         </div>
       </div>
       {log.length > 0 && (
@@ -224,11 +231,11 @@ function KpiStrip({ kpis }) {
   const total = kpis.total_responses || 0
   const v = kpis.overall_verdicts || {}
   const tiles = [
-    { label: 'Responses', value: total },
+    { label: 'Responses judged', value: total },
     { label: 'Accuracy', value: `${kpis.accuracy_pct || 0}%`, hint: `${v.correct || 0} of ${total} fully correct` },
     { label: 'Incorrect', value: (v.incorrect || 0) + (v.partially_incorrect || 0), hint: 'incl. partial', tone: 'text-rose-600' },
-    { label: 'Unverifiable', value: v.unverifiable || 0, tone: 'text-slate-500' },
-    { label: 'Cited URLs', value: kpis.total_citations || 0 },
+    { label: 'Skipped', value: kpis.skipped_no_brand_citation || 0, hint: 'no brand URL cited', tone: 'text-amber-700' },
+    { label: '3rd-party URLs', value: kpis.total_citations || 0 },
     { label: 'Unreliable citations', value: (kpis.citation_verdicts?.unreliable || 0) + (kpis.citation_verdicts?.partially_unreliable || 0), tone: 'text-rose-600' },
   ]
   return (
@@ -331,6 +338,34 @@ function ResponseRow({ row }) {
               {row.response}
             </div>
           </div>
+          {row.brand_sources?.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Brand URLs used as ground truth</div>
+              <ul className="space-y-1">
+                {row.brand_sources.map((s, i) => (
+                  <li key={i} className="text-xs">
+                    <a href={s.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline break-all">
+                      {s.title || s.url}
+                    </a>
+                    {s.source && <span className="text-slate-500"> · {s.source}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {row.third_party_urls?.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Third-party URLs compared</div>
+              <ul className="space-y-1">
+                {row.third_party_urls.map((s, i) => (
+                  <li key={i} className="text-xs">
+                    <a href={s.url} target="_blank" rel="noreferrer" className="text-slate-700 hover:underline break-all">{s.url}</a>
+                    {s.category && <span className="text-slate-500"> · {s.category}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div>
             <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Claims</div>
             <div className="space-y-2">
@@ -414,7 +449,7 @@ function CitedUrlsTable({ results }) {
     >
       {!results.length ? (
         <div className="text-sm text-slate-500">
-          Upload a Citations Excel file (with <code>master_outlet_id</code>, <code>response_id</code>, <code>url</code>) — or include raw http(s) links directly in the response text — to see cited-URL results here.
+          No third-party URLs judged yet. Each judged response contributes its cited third-party URLs here (deduped).
         </div>
       ) : (
         <div className="space-y-2">
@@ -468,17 +503,18 @@ export default function DataChecker() {
   const [log, setLog] = useState([])
   const [loaded, setLoaded] = useState(null)
   const [progress, setProgress] = useState({
-    crawlDone: 0, crawlTotal: 0,
+    fetchDone: 0, fetchTotal: 0,
     responseDone: 0, responseTotal: 0,
-    citationDone: 0, citationTotal: 0,
+    citationCount: 0,
   })
   const [responses, setResponses] = useState([])
   const [citedUrls, setCitedUrls] = useState([])
+  const [skippedResponses, setSkippedResponses] = useState([])
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
 
   const appendLog = useCallback((line) => setLog(l => [...l, line]), [])
-  const canRun = Boolean(mentionsFile && brandUrl.trim())
+  const canRun = Boolean(mentionsFile && citationsFile && brandUrl.trim())
 
   const run = async () => {
     if (!canRun) return
@@ -488,8 +524,9 @@ export default function DataChecker() {
     setLoaded(null)
     setResponses([])
     setCitedUrls([])
+    setSkippedResponses([])
     setResult(null)
-    setProgress({ crawlDone: 0, crawlTotal: 0, responseDone: 0, responseTotal: 0, citationDone: 0, citationTotal: 0 })
+    setProgress({ fetchDone: 0, fetchTotal: 0, responseDone: 0, responseTotal: 0, citationCount: 0 })
 
     const fd = new FormData()
     fd.append('mentionsFile', mentionsFile)
@@ -532,30 +569,32 @@ export default function DataChecker() {
         appendLog(evt.message)
         break
       case 'loaded':
-        setLoaded({ mentions: evt.mentions, citations: evt.citations })
-        appendLog(`Loaded ${evt.mentions?.count || 0} mentions, ${evt.citations?.count || 0} citations`)
-        setProgress(p => ({ ...p, responseTotal: Math.min(evt.mentions?.count || 0, 60) }))
+        setLoaded({
+          mentions: evt.mentions,
+          citations: evt.citations,
+          eligible_response_count: evt.eligible_response_count,
+          skipped_no_brand_citation: evt.skipped_no_brand_citation,
+          will_judge: evt.will_judge,
+        })
+        appendLog(`Loaded ${evt.mentions?.count || 0} mentions, ${evt.citations?.count || 0} citations · ${evt.will_judge || 0} eligible · ${evt.skipped_no_brand_citation || 0} skipped (no brand URL)`)
+        setProgress(p => ({ ...p, responseTotal: evt.will_judge || 0 }))
         break
-      case 'crawl':
-        if (evt.stage === 'fetched') {
-          setProgress(p => ({ ...p, crawlDone: evt.done, crawlTotal: evt.total }))
-        } else if (evt.stage === 'done') {
-          appendLog(`Crawl complete: ${evt.pages} pages usable.`)
-        }
+      case 'fetch_progress':
+        setProgress(p => ({ ...p, fetchDone: evt.done, fetchTotal: evt.total }))
         break
       case 'response_start':
         setProgress(p => ({ ...p, responseTotal: evt.total }))
         break
       case 'response_done':
         setResponses(rs => [...rs, evt.row])
-        setProgress(p => ({ ...p, responseDone: evt.index + 1, responseTotal: evt.total }))
+        setProgress(p => ({ ...p, responseDone: evt.done ?? p.responseDone + 1, responseTotal: evt.total }))
         break
-      case 'citation_start':
-        setProgress(p => ({ ...p, citationTotal: evt.total }))
+      case 'response_skipped':
+        setSkippedResponses(rs => [...rs, evt.row])
         break
       case 'citation_done':
         setCitedUrls(cs => [...cs, evt.row])
-        setProgress(p => ({ ...p, citationDone: evt.index + 1, citationTotal: evt.total }))
+        setProgress(p => ({ ...p, citationCount: evt.done ?? p.citationCount + 1 }))
         break
       case 'done':
         setResult(evt.result)
@@ -619,8 +658,41 @@ export default function DataChecker() {
           {result && <PlatformBreakdown kpis={result.kpis} />}
           <ResponsesTable results={responses} />
           <CitedUrlsTable results={citedUrls} />
+          {skippedResponses.length > 0 && <SkippedTable rows={skippedResponses} />}
         </>
       )}
     </div>
+  )
+}
+
+function SkippedTable({ rows }) {
+  return (
+    <Section title={`Skipped — no brand URL cited (${rows.length})`}>
+      <div className="text-xs text-slate-500 mb-2">
+        These responses had no cited URL belonging to the brand website (or marked ownership="Owned"), so there is no ground truth to verify them against.
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-slate-500 border-b border-slate-200">
+              <th className="py-1 pr-3">Platform</th>
+              <th className="py-1 pr-3">Product</th>
+              <th className="py-1 pr-3">Response ID</th>
+              <th className="py-1">Query</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.pk} className="border-b border-slate-100">
+                <td className="py-1 pr-3 capitalize text-slate-800">{r.platform}</td>
+                <td className="py-1 pr-3 text-slate-700">{r.product || '—'}</td>
+                <td className="py-1 pr-3 text-slate-500">#{r.response_id}</td>
+                <td className="py-1 text-slate-700">{r.query}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
   )
 }

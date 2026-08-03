@@ -9,34 +9,70 @@ function client() {
   return new Anthropic({ apiKey: key })
 }
 
-const RESPONSE_TOOL = {
-  name: 'submit_verdict',
-  description: 'Submit a structured factual verdict on the LLM response against the brand website.',
+const ANALYSIS_TOOL = {
+  name: 'submit_analysis',
+  description:
+    'Submit the structured factual analysis for one LLM response: (a) the response verdict against its cited brand URLs, and (b) a verdict per third-party cited URL comparing it to the same brand URLs.',
   input_schema: {
     type: 'object',
-    required: ['verdict', 'confidence', 'summary', 'claims'],
+    required: ['response_verdict', 'third_party_verdicts'],
     properties: {
-      verdict: {
-        type: 'string',
-        enum: ['correct', 'partially_incorrect', 'incorrect', 'unverifiable'],
-        description: 'Overall verdict about whether the response is factually correct against the brand ground truth.',
+      response_verdict: {
+        type: 'object',
+        required: ['verdict', 'summary', 'claims'],
+        properties: {
+          verdict: {
+            type: 'string',
+            enum: ['correct', 'partially_incorrect', 'incorrect', 'unverifiable'],
+            description:
+              "'correct' iff ALL substantive brand claims are SUPPORTED by the brand URLs; 'partially_incorrect' if some claims are CONTRADICTED but some are SUPPORTED; 'incorrect' if the main claim(s) are CONTRADICTED; 'unverifiable' if the brand URLs don't cover the claims.",
+          },
+          summary: { type: 'string' },
+          claims: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['text', 'verdict'],
+              properties: {
+                text: { type: 'string', description: 'Atomic factual claim about the brand extracted from the response.' },
+                verdict: { type: 'string', enum: ['SUPPORTED', 'CONTRADICTED', 'NOT_FOUND'] },
+                evidence: { type: 'string', description: 'Short verbatim quote from the brand URL supporting the verdict, or empty.' },
+                source_url: { type: 'string', description: 'Exact brand URL from BRAND_URLS whose content supports the verdict.' },
+              },
+            },
+          },
+        },
       },
-      confidence: { type: 'number', minimum: 0, maximum: 1 },
-      summary: { type: 'string', description: 'One-sentence explanation of the verdict.' },
-      claims: {
+      third_party_verdicts: {
         type: 'array',
+        description: 'One entry per third-party cited URL provided. Empty if none were provided.',
         items: {
           type: 'object',
-          required: ['text', 'verdict'],
+          required: ['url', 'verdict', 'summary'],
           properties: {
-            text: { type: 'string', description: 'A factual claim about the brand extracted from the response.' },
+            url: { type: 'string', description: 'Exact URL from THIRD_PARTY_URLS being judged.' },
             verdict: {
               type: 'string',
-              enum: ['SUPPORTED', 'CONTRADICTED', 'NOT_FOUND'],
-              description: 'Whether the brand-site evidence supports, contradicts, or is silent on this claim.',
+              enum: ['reliable', 'partially_unreliable', 'unreliable', 'unreachable'],
+              description: "'reliable' = no contradiction with the brand URLs; 'partially_unreliable' = minor mismatches; 'unreliable' = clear factual contradiction; 'unreachable' if the URL had no usable content.",
             },
-            evidence: { type: 'string', description: 'Short quote from the brand-site page that supports the verdict, or empty.' },
-            source_url: { type: 'string', description: 'URL of the brand-site page providing evidence, or empty.' },
+            summary: { type: 'string' },
+            issues: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['type', 'detail'],
+                properties: {
+                  type: {
+                    type: 'string',
+                    enum: ['contradicts_brand', 'does_not_support_claim', 'stale', 'off_topic', 'other'],
+                  },
+                  detail: { type: 'string' },
+                  evidence: { type: 'string', description: 'Short verbatim quote from the third-party URL demonstrating the mismatch.' },
+                  brand_source_url: { type: 'string', description: 'Exact brand URL that contradicts the third-party content.' },
+                },
+              },
+            },
           },
         },
       },
@@ -44,91 +80,63 @@ const RESPONSE_TOOL = {
   },
 }
 
-const CITATION_TOOL = {
-  name: 'submit_citation_verdict',
-  description: 'Judge whether a cited URL correctly supports the claims for which it was cited, and whether it contradicts the brand ground truth.',
-  input_schema: {
-    type: 'object',
-    required: ['verdict', 'summary', 'issues'],
-    properties: {
-      verdict: {
-        type: 'string',
-        enum: ['reliable', 'partially_unreliable', 'unreliable', 'unreachable'],
-      },
-      summary: { type: 'string' },
-      issues: {
-        type: 'array',
-        items: {
-          type: 'object',
-          required: ['type', 'detail'],
-          properties: {
-            type: {
-              type: 'string',
-              enum: ['contradicts_brand', 'does_not_support_claim', 'stale', 'off_topic', 'other'],
-            },
-            detail: { type: 'string' },
-            evidence: { type: 'string' },
-          },
-        },
-      },
-    },
-  },
+function fmtSources(pages) {
+  return pages.map((p, i) => `[SRC ${i + 1}] ${p.title || '(no title)'} — ${p.url}\n${(p.text || '').slice(0, 1400)}`).join('\n\n---\n\n')
 }
 
-async function toolCall({ system, user, tool, tool_name, max_tokens = 1400 }) {
+export async function analyzeResponse({
+  brandName,
+  brandOrigin,
+  query,
+  platform,
+  response,
+  brandPages,
+  thirdPartyPages,
+}) {
   const c = client()
+
+  const system =
+    `You are a factual auditor for the brand "${brandName}" (${brandOrigin}). ` +
+    `Ground truth for THIS analysis is the set of BRAND_URLS provided below — extracted content from the brand's own web pages that were cited by the LLM. ` +
+    `Do NOT use your general knowledge. Only mark CONTRADICTED when a BRAND_URL clearly states something different from the claim. ` +
+    `Use NOT_FOUND when the brand URLs don't cover the claim. ` +
+    `Third-party URLs must be judged strictly against the BRAND_URLS: a third-party is 'reliable' only if it does not contradict the brand URLs on any factual claim relevant to the response.`
+
+  const user =
+    `USER QUERY: ${query}\n` +
+    `LLM PLATFORM: ${platform}\n\n` +
+    `LLM RESPONSE:\n${response}\n\n` +
+    `BRAND_URLS (ground truth for this response):\n${fmtSources(brandPages)}\n\n` +
+    (thirdPartyPages.length
+      ? `THIRD_PARTY_URLS to judge against the brand URLs:\n${fmtSources(thirdPartyPages)}\n\n`
+      : `THIRD_PARTY_URLS: (none)\n\n`) +
+    `Tasks:\n` +
+    `A) Extract 3–8 atomic factual claims about the brand from the LLM response. For each, mark SUPPORTED / CONTRADICTED / NOT_FOUND against the BRAND_URLS. Quote a short evidence snippet and give the source_url. Then set the overall response verdict.\n` +
+    `B) For every entry in THIRD_PARTY_URLS, decide reliable / partially_unreliable / unreliable / unreachable relative to the BRAND_URLS. List concrete issues with evidence.\n` +
+    `Return everything via the submit_analysis tool.`
+
   let lastErr
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const msg = await c.messages.create({
         model: MODEL,
-        max_tokens,
+        max_tokens: 2200,
         system,
-        tools: [tool],
-        tool_choice: { type: 'tool', name: tool_name },
+        tools: [ANALYSIS_TOOL],
+        tool_choice: { type: 'tool', name: 'submit_analysis' },
         messages: [{ role: 'user', content: user }],
       })
-      const block = msg.content.find(b => b.type === 'tool_use' && b.name === tool_name)
+      const block = msg.content.find(b => b.type === 'tool_use' && b.name === 'submit_analysis')
       if (block) return block.input
-      lastErr = new Error('model did not call the expected tool')
+      lastErr = new Error('model did not call submit_analysis')
     } catch (e) {
       lastErr = e
       if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 800 * (attempt + 1)))
     }
   }
-  throw lastErr
-}
-
-function snippets(pages) {
-  return pages.map((p, i) => `[SRC ${i + 1}] ${p.title || '(no title)'} — ${p.url}\n${p.text.slice(0, 1200)}`).join('\n\n')
-}
-
-export async function judgeResponse({ brandName, brandOrigin, query, platform, response, pages }) {
-  const system = `You are a factual verifier. Ground truth is the brand's own website (${brandName} — ${brandOrigin}). Ignore your general knowledge. If a claim about the brand is not on the supplied brand pages, say NOT_FOUND. Only mark CONTRADICTED when a brand page clearly states something different. When quoting evidence, use short verbatim snippets from the SRC blocks. Give a strict verdict: 'correct' only if ALL substantive brand claims are SUPPORTED; 'partially_incorrect' if some claims are CONTRADICTED but at least one is SUPPORTED; 'incorrect' if the main claim(s) are CONTRADICTED; 'unverifiable' if none of the claims can be found on the brand site.`
-  const user =
-    `QUERY: ${query}\n` +
-    `PLATFORM (LLM under test): ${platform}\n\n` +
-    `LLM RESPONSE:\n${response}\n\n` +
-    `BRAND GROUND-TRUTH PAGES:\n${snippets(pages)}\n\n` +
-    `Extract 3–8 atomic factual claims about the brand from the response. Verify each against the brand pages. Then submit the overall verdict via the submit_verdict tool.`
-  try {
-    return await toolCall({ system, user, tool: RESPONSE_TOOL, tool_name: 'submit_verdict' })
-  } catch (e) {
-    return { verdict: 'unverifiable', confidence: 0, summary: `Judge failed: ${String(e.message || e).slice(0, 200)}`, claims: [], _error: true }
-  }
-}
-
-export async function judgeCitedUrl({ brandName, brandOrigin, response, url, urlContent, brandPages }) {
-  const system = `You verify whether a third-party URL cited by an LLM (a) actually contains the specific claims for which it was cited and (b) contradicts the brand's own website (${brandName} — ${brandOrigin}). Consider a URL 'reliable' only if its content supports the LLM's use of it and does not contradict the brand site on factual claims. If the URL was unreachable, mark 'unreachable'.`
-  const user =
-    `LLM RESPONSE THAT CITED THIS URL:\n${response.slice(0, 3000)}\n\n` +
-    `CITED URL: ${url}\n` +
-    `CITED URL CONTENT (extracted):\n${urlContent.slice(0, 4000)}\n\n` +
-    `BRAND GROUND-TRUTH PAGES:\n${snippets(brandPages)}\n\n` +
-    `Submit the verdict via submit_citation_verdict.`
-  try {
-    return await toolCall({ system, user, tool: CITATION_TOOL, tool_name: 'submit_citation_verdict', max_tokens: 1000 })
-  } catch (e) {
-    return { verdict: 'unreachable', summary: `Judge failed: ${String(e.message || e).slice(0, 200)}`, issues: [], _error: true }
+  return {
+    response_verdict: { verdict: 'unverifiable', summary: `Judge failed: ${String(lastErr?.message || lastErr).slice(0, 200)}`, claims: [] },
+    third_party_verdicts: [],
+    _error: true,
   }
 }
