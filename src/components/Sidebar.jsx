@@ -27,6 +27,7 @@ const navItems = [
     children: [
       { to: '/pages/dashboard', label: 'Dashboard' },
       { to: '/content-strategy', label: 'Content Strategy and AI' },
+      { to: '/data-checker', label: 'Data Checker' },
       { to: '/pages/deep-dive', label: 'Deep Dive' },
     ],
   },
@@ -60,7 +61,7 @@ function SingleInterfaceLogo() {
 export default function Sidebar() {
   const [expanded, setExpanded] = useState(true)
   const location = useLocation()
-  const pagesActive = location.pathname.startsWith('/pages') || location.pathname === '/content-strategy'
+  const pagesActive = location.pathname.startsWith('/pages') || location.pathname === '/content-strategy' || location.pathname === '/data-checker'
   const [pagesOpen, setPagesOpen] = useState(pagesActive)
 
   return (
